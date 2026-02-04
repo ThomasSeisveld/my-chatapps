@@ -84,8 +84,13 @@
   </div>
 
   <script>
-    // WebSocket connection
-    const socket = io()
+    // WebSocket connection - connect to the current host (works on any device)
+    const socket = io({
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    })
     
     const currentUser = {
       id: '{{ currentUser.id }}',

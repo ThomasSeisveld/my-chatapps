@@ -793,7 +793,11 @@ app.post('/logout', (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 8000
-httpServer.listen(PORT, () => {
-  console.log(`Chat app started on http://localhost:${PORT}`)
-  console.log(`WebSocket server ready for connections`)
+
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(``)
+  console.log(`✓ Chat app started on port ${PORT}`)
+  console.log(`  Access from any device on your network`)
+  console.log(`  WebSocket ready for connections`)
+  console.log(``)
 })
