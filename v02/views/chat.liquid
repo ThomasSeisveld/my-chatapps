@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chat - Chat App</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="chat-container">
@@ -83,6 +84,9 @@
   </div>
 
   <script>
+    // WebSocket connection
+    const socket = io()
+    
     const currentUser = {
       id: '{{ currentUser.id }}',
       username: '{{ currentUser.username }}'
@@ -90,45 +94,108 @@
 
     let selectedChatId = null;
     let selectedReceiverId = null;
+    let isTyping = false;
+
+    // Register user connection
+    socket.on('connect', () => {
+      console.log('✓ Connected to WebSocket server')
+      socket.emit('user-join', currentUser.id)
+    })
+
+    // Handle incoming messages in real-time
+    socket.on('message-received', (data) => {
+      const { message, senderId, receiverId } = data
+      
+      if (selectedReceiverId === senderId) {
+        // Append message to chat window if it's from the current chat
+        appendMessage(message, senderId === currentUser.id)
+      }
+    })
+
+    // Handle messages loaded from Firebase
+    socket.on('messages-loaded', (data) => {
+      const { userId, messages } = data
+      
+      if (selectedReceiverId === userId) {
+        displayMessages(messages, userId)
+      }
+    })
+
+    // Handle user typing
+    socket.on('user-typing', (data) => {
+      const { userId } = data
+      if (userId === selectedReceiverId) {
+        console.log(`${userId} is typing...`)
+      }
+    })
+
+    // Handle user stop typing
+    socket.on('user-stop-typing', (data) => {
+      const { userId } = data
+      if (userId === selectedReceiverId) {
+        console.log(`${userId} stopped typing`)
+      }
+    })
+
+    // Handle online/offline status
+    socket.on('user-online', (data) => {
+      console.log(`✓ User ${data.userId} is now online`)
+    })
+
+    socket.on('user-offline', (data) => {
+      console.log(`⚠ User ${data.userId} is now offline`)
+    })
 
     function selectChat(chatId, userId) {
       selectedChatId = chatId;
       selectedReceiverId = userId;
       document.getElementById('message-input-area').style.display = 'flex';
-      loadChat(chatId, userId);
+      
+      // Load existing messages via WebSocket
+      socket.emit('load-messages', { userId })
     }
 
-    function loadChat(chatId, userId) {
+    function displayMessages(messages, userId) {
       const chatWindow = document.getElementById('chat-window');
-      chatWindow.innerHTML = '<div class="chat-loading">Berichtjes laden...</div>';
       
-      fetch(`/messages?userId=${userId}`, {
-        method: 'GET'
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.messages && data.messages.length > 0) {
-          let html = '';
-          data.messages.forEach(msg => {
-            const isOwn = msg.senderId === currentUser.id;
-            const date = new Date(msg.createdAt).toLocaleString('nl-NL');
-            html += `
-              <div class="message ${isOwn ? 'own-message' : 'other-message'}">
-                <p>${escapeHtml(msg.text)}</p>
-                <span class="message-time">${date}</span>
-              </div>
-            `;
-          });
-          chatWindow.innerHTML = html;
-        } else {
-          chatWindow.innerHTML = '<div class="no-messages">Geen berichtjes in deze chat. Begin een conversatie!</div>';
-        }
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-      })
-      .catch(err => {
-        chatWindow.innerHTML = '<div class="error">Fout bij laden berichtjes</div>';
-        console.error(err);
-      });
+      if (messages && messages.length > 0) {
+        let html = '';
+        messages.forEach(msg => {
+          const isOwn = msg.senderId === currentUser.id;
+          const date = new Date(msg.createdAt).toLocaleString('nl-NL');
+          html += `
+            <div class="message ${isOwn ? 'own-message' : 'other-message'}">
+              <p>${escapeHtml(msg.text)}</p>
+              <span class="message-time">${date}</span>
+            </div>
+          `;
+        });
+        chatWindow.innerHTML = html;
+      } else {
+        chatWindow.innerHTML = '<div class="no-messages">Geen berichtjes in deze chat. Begin een conversatie!</div>';
+      }
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function appendMessage(message, isOwn) {
+      const chatWindow = document.getElementById('chat-window');
+      
+      // Clear empty state if present
+      const emptyState = chatWindow.querySelector('.empty-state');
+      const noMessages = chatWindow.querySelector('.no-messages');
+      if (emptyState) emptyState.remove();
+      if (noMessages) noMessages.remove();
+      
+      const date = new Date(message.createdAt).toLocaleString('nl-NL');
+      const messageHtml = `
+        <div class="message ${isOwn ? 'own-message' : 'other-message'}">
+          <p>${escapeHtml(message.text)}</p>
+          <span class="message-time">${date}</span>
+        </div>
+      `;
+      
+      chatWindow.innerHTML += messageHtml;
+      chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
     function sendMessage(event) {
@@ -139,28 +206,36 @@
       
       if (!text || !selectedReceiverId) return;
 
-      fetch('/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiverId: selectedReceiverId,
-          text: text
-        })
+      // Send message via WebSocket
+      socket.emit('send-message', {
+        chatId: selectedChatId,
+        receiverId: selectedReceiverId,
+        text: text
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          messageInput.value = '';
-          loadChat(selectedChatId, selectedReceiverId);
-        } else {
-          alert('Fout bij versturen bericht');
-        }
-      })
-      .catch(err => {
-        alert('Fout: ' + err.message);
-        console.error('Error sending message:', err);
-      });
+
+      messageInput.value = '';
+      messageInput.focus()
     }
+
+    // Send typing indicator
+    document.getElementById('message-input').addEventListener('input', () => {
+      if (!isTyping && selectedReceiverId) {
+        isTyping = true
+        socket.emit('user-typing', { receiverId: selectedReceiverId })
+      }
+    })
+
+    // Send stop typing after 1 second of inactivity
+    let typingTimeout
+    document.getElementById('message-input').addEventListener('input', () => {
+      clearTimeout(typingTimeout)
+      typingTimeout = setTimeout(() => {
+        if (isTyping && selectedReceiverId) {
+          isTyping = false
+          socket.emit('user-stop-typing', { receiverId: selectedReceiverId })
+        }
+      }, 1000)
+    })
 
     function escapeHtml(text) {
       const map = {
@@ -179,12 +254,15 @@
         .catch(err => console.error('Logout error:', err));
     });
 
-    // Auto-refresh messages every 2 seconds
-    setInterval(() => {
-      if (selectedReceiverId) {
-        loadChat(selectedChatId, selectedReceiverId);
-      }
-    }, 2000);
+    // Error handling
+    socket.on('error', (data) => {
+      console.error('WebSocket error:', data.message)
+      alert('Error: ' + data.message)
+    })
+
+    socket.on('disconnect', () => {
+      console.log('✗ Disconnected from WebSocket server')
+    })
   </script>
 </body>
 </html>

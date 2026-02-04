@@ -8,6 +8,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
 import bcrypt from 'bcrypt'
+import { createServer } from 'http'
+import { Server } from 'socket.io'
 
 // Load environment variables
 dotenv.config()
@@ -17,6 +19,13 @@ const __dirname = path.dirname(__filename)
 
 // Initialize Express
 const app = express()
+const httpServer = createServer(app)
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+})
 
 // Stel Liquid in als 'view engine'
 const engine = new Liquid()
@@ -112,6 +121,9 @@ const demoData = {
   chats: {}
 }
 
+// WebSocket user connections
+const userConnections = new Map() // userId -> Set of socket IDs
+
 const setSession = (sessionId, user) => {
   sessions[sessionId] = user
 }
@@ -123,6 +135,213 @@ const getSession = (sessionId) => {
 const clearSession = (sessionId) => {
   delete sessions[sessionId]
 }
+
+// WebSocket event handlers
+io.on('connection', (socket) => {
+  console.log(`[WebSocket] Client connected: ${socket.id}`)
+
+  // User joins chat
+  socket.on('user-join', (userId) => {
+    if (!userConnections.has(userId)) {
+      userConnections.set(userId, new Set())
+    }
+    userConnections.get(userId).add(socket.id)
+    socket.userId = userId
+    socket.join(`user-${userId}`) // Join user room
+    
+    console.log(`✓ User ${userId} connected (${userConnections.get(userId).size} connections)`)
+    
+    // Notify others that this user is online
+    socket.broadcast.emit('user-online', { userId })
+  })
+
+  // Receive message via WebSocket
+  socket.on('send-message', async (data) => {
+    const { chatId, receiverId, text } = data
+    const senderId = socket.userId
+
+    if (!senderId || !receiverId) {
+      socket.emit('error', { message: 'Invalid sender or receiver' })
+      return
+    }
+
+    try {
+      const messageId = uuidv4()
+      const message = {
+        id: messageId,
+        senderId,
+        text,
+        createdAt: new Date().toISOString()
+      }
+
+      if (firebaseInitialized) {
+        // Save to Firebase
+        let chatData = null
+        if (chatId) {
+          chatData = { chatId }
+        } else {
+          // Create new chat
+          const userChatsSnapshot = await db.ref(`userchats/${senderId}`).once('value')
+          const userChatsData = userChatsSnapshot.val() || { chats: [] }
+          
+          chatData = userChatsData.chats?.find(c => 
+            c.participants && c.participants.includes(receiverId)
+          )
+
+          if (!chatData) {
+            const newChatId = uuidv4()
+            chatData = {
+              chatId: newChatId,
+              participants: [senderId, receiverId],
+              createdAt: new Date().toISOString()
+            }
+
+            userChatsData.chats = userChatsData.chats || []
+            userChatsData.chats.push(chatData)
+            await db.ref(`userchats/${senderId}`).set(userChatsData)
+
+            const receiverChatsSnapshot = await db.ref(`userchats/${receiverId}`).once('value')
+            const receiverChatsData = receiverChatsSnapshot.val() || { chats: [] }
+            receiverChatsData.chats = receiverChatsData.chats || []
+            receiverChatsData.chats.push(chatData)
+            await db.ref(`userchats/${receiverId}`).set(receiverChatsData)
+          }
+        }
+
+        await db.ref(`chats/${chatData.chatId}/messages/${messageId}`).set(message)
+        console.log(`✓ Message saved to Firebase: ${chatData.chatId}/${messageId}`)
+      } else {
+        // Demo mode
+        const userChatsData = demoData.userchats[senderId] || { chats: [] }
+        
+        let chatData = userChatsData.chats?.find(c => 
+          c.participants && c.participants.includes(receiverId)
+        )
+
+        if (!chatData) {
+          const newChatId = uuidv4()
+          chatData = {
+            chatId: newChatId,
+            participants: [senderId, receiverId],
+            createdAt: new Date().toISOString()
+          }
+
+          userChatsData.chats = userChatsData.chats || []
+          userChatsData.chats.push(chatData)
+          demoData.userchats[senderId] = userChatsData
+
+          const receiverChatsData = demoData.userchats[receiverId] || { chats: [] }
+          receiverChatsData.chats = receiverChatsData.chats || []
+          receiverChatsData.chats.push(chatData)
+          demoData.userchats[receiverId] = receiverChatsData
+
+          demoData.chats[chatData.chatId] = { messages: [] }
+        }
+
+        if (!demoData.chats[chatData.chatId]) {
+          demoData.chats[chatData.chatId] = { messages: [] }
+        }
+        demoData.chats[chatData.chatId].messages.push(message)
+      }
+
+      // Emit message to receiver and sender
+      io.to(`user-${receiverId}`).emit('message-received', {
+        message,
+        senderId,
+        receiverId
+      })
+
+      socket.emit('message-sent', {
+        message,
+        receiverId
+      })
+
+      console.log(`✓ Message sent from ${senderId} to ${receiverId}`)
+    } catch (err) {
+      console.error('Send message error:', err)
+      socket.emit('error', { message: 'Failed to send message' })
+    }
+  })
+
+  // Load messages for chat
+  socket.on('load-messages', async (data) => {
+    const { userId } = data
+    const currentUserId = socket.userId
+
+    try {
+      let messages = []
+
+      if (firebaseInitialized) {
+        const chatsSnapshot = await db.ref(`userchats/${currentUserId}`).once('value')
+        const userChatsData = chatsSnapshot.val() || { chats: [] }
+
+        const chat = userChatsData.chats?.find(c => 
+          c.participants && c.participants.includes(userId)
+        )
+
+        if (chat) {
+          const messagesSnapshot = await db.ref(`chats/${chat.chatId}/messages`).once('value')
+          const messagesObj = messagesSnapshot.val() || {}
+          
+          messages = Object.values(messagesObj).sort((a, b) => 
+            new Date(a.createdAt) - new Date(b.createdAt)
+          )
+        }
+      } else {
+        // Demo mode
+        const userChatsData = demoData.userchats[currentUserId] || { chats: [] }
+        const chat = userChatsData.chats?.find(c => 
+          c.participants && c.participants.includes(userId)
+        )
+
+        if (chat) {
+          messages = demoData.chats[chat.chatId]?.messages || []
+        }
+      }
+
+      socket.emit('messages-loaded', {
+        userId,
+        messages
+      })
+    } catch (err) {
+      console.error('Load messages error:', err)
+      socket.emit('error', { message: 'Failed to load messages' })
+    }
+  })
+
+  // User disconnects
+  socket.on('disconnect', () => {
+    const userId = socket.userId
+    if (userId && userConnections.has(userId)) {
+      userConnections.get(userId).delete(socket.id)
+      
+      if (userConnections.get(userId).size === 0) {
+        userConnections.delete(userId)
+        socket.broadcast.emit('user-offline', { userId })
+        console.log(`⚠ User ${userId} disconnected (offline)`)
+      } else {
+        console.log(`✓ User ${userId} connection closed (${userConnections.get(userId).size} remaining)`)
+      }
+    }
+    console.log(`[WebSocket] Client disconnected: ${socket.id}`)
+  })
+
+  // Handle typing indicator
+  socket.on('user-typing', (data) => {
+    const { receiverId } = data
+    io.to(`user-${receiverId}`).emit('user-typing', {
+      userId: socket.userId
+    })
+  })
+
+  // Handle stop typing
+  socket.on('user-stop-typing', (data) => {
+    const { receiverId } = data
+    io.to(`user-${receiverId}`).emit('user-stop-typing', {
+      userId: socket.userId
+    })
+  })
+})
 
 // Routes
 
@@ -534,6 +753,7 @@ app.post('/logout', (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 8000
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Chat app started on http://localhost:${PORT}`)
+  console.log(`WebSocket server ready for connections`)
 })
