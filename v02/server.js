@@ -7,6 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
+import bcrypt from 'bcrypt'
 
 // Load environment variables
 dotenv.config()
@@ -209,14 +210,19 @@ app.post('/auth', async (req, res) => {
         displayName: username
       })
 
+      // Hash password for database storage
+      const hashedPassword = await bcrypt.hash(password, 10)
+
       // Store user data in Realtime Database
       await db.ref(`users/${userRecord.uid}`).set({
         id: userRecord.uid,
         username,
         email,
         avatar: '/default-avatar.png',
+        password: hashedPassword,
         createdAt: new Date().toISOString()
       })
+      console.log(`✓ User registered and saved to Firebase: ${email} (${userRecord.uid})`)
 
       // Create session
       const sessionId = uuidv4()
@@ -233,25 +239,32 @@ app.post('/auth', async (req, res) => {
 
     if (action === 'login') {
       try {
+        // Check if user exists in Firebase Auth
         const userRecord = await auth.getUserByEmail(email)
         
-        // Note: Firebase Admin SDK doesn't verify passwords
-        // In production, use Firebase REST API or implement proper verification
-        
-        // Get user data from database
+        // Get user data from Realtime Database
         const snapshot = await db.ref(`users/${userRecord.uid}`).once('value')
         const userData = snapshot.val()
 
         if (!userData) {
-          return res.render('login', { error: 'Gebruiker data niet gevonden' })
+          return res.render('login', { error: 'Gebruiker data niet gevonden in database' })
         }
 
+        // Verify password
+        const passwordMatch = await bcrypt.compare(password, userData.password || '')
+        if (!passwordMatch) {
+          return res.render('login', { error: 'Ongeldig wachtwoord' })
+        }
+
+        // Create session
         const sessionId = uuidv4()
         setSession(sessionId, userData)
+        console.log(`✓ User logged in: ${email} (${userRecord.uid})`)
 
         res.cookie('sessionId', sessionId)
         return res.redirect('/chat')
       } catch (err) {
+        console.error('Login error:', err.message)
         return res.render('login', { error: 'Ongeldig email of wachtwoord' })
       }
     }
@@ -309,6 +322,7 @@ app.get('/chat', async (req, res) => {
     const usersSnapshot = await db.ref('users').once('value')
     const allUsers = usersSnapshot.val() || {}
     
+    console.log(`📊 Loaded ${Object.keys(allUsers).length} users from Firebase`)
     const otherUsers = Object.values(allUsers).filter(u => u.id !== currentUser.id)
 
     const chatsSnapshot = await db.ref(`userchats/${currentUser.id}`).once('value')

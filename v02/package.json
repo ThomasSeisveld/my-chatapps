@@ -28,6 +28,7 @@
   },
   "homepage": "https://github.com/fdnd-task/connect-your-tribe-profile-card#readme",
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "dotenv": "^17.2.3",
     "express": "latest",
     "firebase-admin": "latest",
