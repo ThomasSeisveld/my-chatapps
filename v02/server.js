@@ -256,6 +256,22 @@ io.on('connection', (socket) => {
         receiverId
       })
 
+      // Broadcast chat update to both users
+      const updateData = {
+        lastMessage: text,
+        updatedAt: new Date().toISOString()
+      }
+      
+      io.to(`user-${receiverId}`).emit('chat-updated', {
+        chatUpdate: updateData,
+        otherUserId: senderId
+      })
+      
+      io.to(`user-${senderId}`).emit('chat-updated', {
+        chatUpdate: updateData,
+        otherUserId: receiverId
+      })
+
       console.log(`✓ Message sent from ${senderId} to ${receiverId}`)
     } catch (err) {
       console.error('Send message error:', err)

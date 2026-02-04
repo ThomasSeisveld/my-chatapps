@@ -110,6 +110,28 @@
         // Append message to chat window if it's from the current chat
         appendMessage(message, senderId === currentUser.id)
       }
+      
+      // Update chat list item
+      updateChatListItem(senderId, message.text)
+    })
+
+    // Handle own sent messages
+    socket.on('message-sent', (data) => {
+      const { message, receiverId } = data
+      
+      if (selectedReceiverId === receiverId) {
+        // Append own message to chat window
+        appendMessage(message, true)
+      }
+      
+      // Refresh chat list to update last message
+      updateChatListItem(receiverId, message.text)
+    })
+
+    // Handle chat list updates
+    socket.on('chat-updated', (data) => {
+      const { chatUpdate, otherUserId } = data
+      updateChatListItem(otherUserId, chatUpdate.lastMessage)
     })
 
     // Handle messages loaded from Firebase
@@ -153,6 +175,22 @@
       
       // Load existing messages via WebSocket
       socket.emit('load-messages', { userId })
+    }
+
+    function updateChatListItem(userId, lastMessage) {
+      // Find the chat item for this user and update it
+      const chatItems = document.querySelectorAll('.chat-item')
+      
+      chatItems.forEach(item => {
+        // Check if this chat item is for the given user
+        const chatItemOnclick = item.getAttribute('onclick')
+        if (chatItemOnclick && chatItemOnclick.includes(`'${userId}'`)) {
+          const lastMessageElement = item.querySelector('.last-message')
+          if (lastMessageElement) {
+            lastMessageElement.textContent = lastMessage
+          }
+        }
+      })
     }
 
     function displayMessages(messages, userId) {
