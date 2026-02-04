@@ -192,19 +192,27 @@
       console.log(`🔗 selectChat called with chatId=${chatId}, userId=${userId}`)
       console.log(`   Socket connected: ${socket.connected}, socket.id: ${socket.id}`)
       
-      if (!socket.connected) {
-        console.error('❌ Socket is not connected!')
-        return
-      }
-      
       selectedChatId = chatId;
       selectedReceiverId = userId;
       document.getElementById('message-input-area').style.display = 'flex';
       
-      console.log(`📤 Emitting load-messages for userId=${userId}`)
-      // Load existing messages via WebSocket
-      socket.emit('load-messages', { userId })
-      console.log(`✅ load-messages emitted`)
+      // Try WebSocket first
+      if (socket.connected) {
+        console.log(`📤 Emitting load-messages via WebSocket for userId=${userId}`)
+        socket.emit('load-messages', { userId })
+      } else {
+        console.warn('⚠️ WebSocket not connected, falling back to HTTP request')
+        // Fallback to HTTP
+        fetch(`/messages?userId=${userId}`)
+          .then(res => res.json())
+          .then(data => {
+            console.log(`📥 Messages loaded via HTTP:`, data)
+            displayMessages(data.messages, userId)
+          })
+          .catch(err => {
+            console.error('❌ Error loading messages:', err)
+          })
+      }
     }
 
     function updateChatListItem(userId, lastMessage, isNewChat = false, otherUser = null) {
