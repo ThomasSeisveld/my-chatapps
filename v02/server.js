@@ -6,6 +6,10 @@ import { v4 as uuidv4 } from 'uuid'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import dotenv from 'dotenv'
+
+// Load environment variables
+dotenv.config()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -50,21 +54,47 @@ let db = null
 let auth = null
 
 try {
+  // Try to load from file first (backward compatibility)
   if (fs.existsSync(serviceAccountPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'))
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      databaseURL: "https://hva-chatapp-default-rtdb.europe-west1.firebasedatabase.app"
+      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://hva-chatapp-default-rtdb.europe-west1.firebasedatabase.app"
     })
     firebaseInitialized = true
     db = admin.database()
     auth = admin.auth()
-    console.log('✓ Firebase initialized with Admin SDK')
-  } else {
-    console.warn('⚠ Warning: serviceAccountKey.json not found.')
+    console.log('✓ Firebase initialized from serviceAccountKey.json')
+  } 
+  // Try to load from environment variables
+  else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
+    const serviceAccount = {
+      type: 'service_account',
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      client_id: process.env.FIREBASE_CLIENT_ID,
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs'
+    }
+    
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://hva-chatapp-default-rtdb.europe-west1.firebasedatabase.app"
+    })
+    firebaseInitialized = true
+    db = admin.database()
+    auth = admin.auth()
+    console.log('✓ Firebase initialized from environment variables')
+  } 
+  else {
+    console.warn('⚠ Warning: Firebase credentials not found.')
     console.warn('  The app will work in demo mode with limited functionality.')
-    console.warn('  To enable Firebase, copy serviceAccountKey.example.json to serviceAccountKey.json')
-    console.warn('  and add your Firebase credentials.')
+    console.warn('  Options to enable Firebase:')
+    console.warn('    1. Create v02/.env and copy from v02/.env.example')
+    console.warn('    2. Or create v02/serviceAccountKey.json')
     firebaseInitialized = false
   }
 } catch (err) {

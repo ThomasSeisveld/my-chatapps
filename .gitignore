@@ -3,12 +3,14 @@ node_modules/
 npm-debug.log
 package-lock.json
 
-# Firebase credentials - NEVER commit these!
-serviceAccountKey.json
-*.json.bak
+# Environment variables - NEVER commit these!
 .env
 .env.local
 .env.*.local
+
+# Firebase credentials - NEVER commit these!
+serviceAccountKey.json
+*.json.bak
 
 # IDEs
 .vscode/

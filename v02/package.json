@@ -28,9 +28,10 @@
   },
   "homepage": "https://github.com/fdnd-task/connect-your-tribe-profile-card#readme",
   "dependencies": {
+    "dotenv": "^17.2.3",
     "express": "latest",
-    "liquidjs": "latest",
     "firebase-admin": "latest",
+    "liquidjs": "latest",
     "uuid": "latest"
   }
 }
