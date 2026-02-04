@@ -174,7 +174,18 @@ io.on('connection', (socket) => {
         createdAt: new Date().toISOString()
       }
 
+      let isNewChat = false
+      let senderUser = null
+      let receiverUser = null
+
       if (firebaseInitialized) {
+        // Get user data for both participants
+        const senderSnapshot = await db.ref(`users/${senderId}`).once('value')
+        senderUser = senderSnapshot.val()
+        
+        const receiverSnapshot = await db.ref(`users/${receiverId}`).once('value')
+        receiverUser = receiverSnapshot.val()
+
         // Save to Firebase
         let chatData = null
         if (chatId) {
@@ -189,6 +200,7 @@ io.on('connection', (socket) => {
           )
 
           if (!chatData) {
+            isNewChat = true
             const newChatId = uuidv4()
             chatData = {
               chatId: newChatId,
@@ -212,6 +224,9 @@ io.on('connection', (socket) => {
         console.log(`✓ Message saved to Firebase: ${chatData.chatId}/${messageId}`)
       } else {
         // Demo mode
+        senderUser = demoData.users[senderId]
+        receiverUser = demoData.users[receiverId]
+
         const userChatsData = demoData.userchats[senderId] || { chats: [] }
         
         let chatData = userChatsData.chats?.find(c => 
@@ -219,6 +234,7 @@ io.on('connection', (socket) => {
         )
 
         if (!chatData) {
+          isNewChat = true
           const newChatId = uuidv4()
           chatData = {
             chatId: newChatId,
@@ -248,12 +264,16 @@ io.on('connection', (socket) => {
       io.to(`user-${receiverId}`).emit('message-received', {
         message,
         senderId,
-        receiverId
+        receiverId,
+        isNewChat,
+        otherUser: senderUser
       })
 
       socket.emit('message-sent', {
         message,
-        receiverId
+        receiverId,
+        isNewChat,
+        otherUser: receiverUser
       })
 
       // Broadcast chat update to both users
@@ -264,12 +284,16 @@ io.on('connection', (socket) => {
       
       io.to(`user-${receiverId}`).emit('chat-updated', {
         chatUpdate: updateData,
-        otherUserId: senderId
+        otherUserId: senderId,
+        isNewChat,
+        otherUser: senderUser
       })
       
       io.to(`user-${senderId}`).emit('chat-updated', {
         chatUpdate: updateData,
-        otherUserId: receiverId
+        otherUserId: receiverId,
+        isNewChat,
+        otherUser: receiverUser
       })
 
       console.log(`✓ Message sent from ${senderId} to ${receiverId}`)

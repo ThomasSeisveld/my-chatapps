@@ -234,6 +234,31 @@ html, body {
   background: #f5f5f5;
 }
 
+.chat-item-highlighted {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  animation: slideDown 0.3s ease-out;
+}
+
+.chat-item-highlighted h4 {
+  color: white;
+}
+
+.chat-item-highlighted .last-message {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .chat-avatar {
   width: 40px;
   height: 40px;

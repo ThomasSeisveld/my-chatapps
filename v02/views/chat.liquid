@@ -104,34 +104,34 @@
 
     // Handle incoming messages in real-time
     socket.on('message-received', (data) => {
-      const { message, senderId, receiverId } = data
+      const { message, senderId, receiverId, isNewChat, otherUser } = data
       
       if (selectedReceiverId === senderId) {
         // Append message to chat window if it's from the current chat
         appendMessage(message, senderId === currentUser.id)
       }
       
-      // Update chat list item
-      updateChatListItem(senderId, message.text)
+      // Update chat list item (create if new chat)
+      updateChatListItem(senderId, message.text, isNewChat, otherUser)
     })
 
     // Handle own sent messages
     socket.on('message-sent', (data) => {
-      const { message, receiverId } = data
+      const { message, receiverId, isNewChat, otherUser } = data
       
       if (selectedReceiverId === receiverId) {
         // Append own message to chat window
         appendMessage(message, true)
       }
       
-      // Refresh chat list to update last message
-      updateChatListItem(receiverId, message.text)
+      // Update chat list item (create if new chat)
+      updateChatListItem(receiverId, message.text, isNewChat, otherUser)
     })
 
     // Handle chat list updates
     socket.on('chat-updated', (data) => {
-      const { chatUpdate, otherUserId } = data
-      updateChatListItem(otherUserId, chatUpdate.lastMessage)
+      const { chatUpdate, otherUserId, isNewChat, otherUser } = data
+      updateChatListItem(otherUserId, chatUpdate.lastMessage, isNewChat, otherUser)
     })
 
     // Handle messages loaded from Firebase
@@ -177,9 +177,11 @@
       socket.emit('load-messages', { userId })
     }
 
-    function updateChatListItem(userId, lastMessage) {
+    function updateChatListItem(userId, lastMessage, isNewChat = false, otherUser = null) {
       // Find the chat item for this user and update it
       const chatItems = document.querySelectorAll('.chat-item')
+      const chatListDiv = document.querySelector('.chat-list')
+      let foundItem = null
       
       chatItems.forEach(item => {
         // Check if this chat item is for the given user
@@ -189,8 +191,65 @@
           if (lastMessageElement) {
             lastMessageElement.textContent = lastMessage
           }
+          foundItem = item
         }
       })
+      
+      // If not found and it's a new chat, create a new item
+      if (!foundItem && isNewChat && otherUser) {
+        const chatItem = document.createElement('div')
+        chatItem.className = 'chat-item'
+        chatItem.setAttribute('onclick', `selectChat(null, '${otherUser.id}')`)
+        chatItem.innerHTML = `
+          <img src="${otherUser.avatar || '/default-avatar.png'}" alt="${otherUser.username}" class="chat-avatar">
+          <div class="chat-item-info">
+            <h4>${escapeHtml(otherUser.username)}</h4>
+            <p class="last-message">${escapeHtml(lastMessage)}</p>
+          </div>
+        `
+        
+        // Insert at the top after h3
+        const chatListTitle = chatListDiv.querySelector('h3')
+        if (chatListTitle) {
+          chatListTitle.insertAdjacentElement('afterend', chatItem)
+        } else {
+          chatListDiv.insertAdjacentElement('afterbegin', chatItem)
+        }
+        
+        foundItem = chatItem
+      }
+      
+      // If found, move to top and highlight (only if not currently in this chat)
+      if (foundItem && selectedReceiverId !== userId) {
+        // Remove the item from its current position
+        foundItem.remove()
+        
+        // Insert at the top of the chat list (after the h3 title)
+        const chatListTitle = chatListDiv.querySelector('h3')
+        if (chatListTitle) {
+          chatListTitle.insertAdjacentElement('afterend', foundItem)
+        } else {
+          chatListDiv.insertAdjacentElement('afterbegin', foundItem)
+        }
+        
+        // Add highlight class
+        foundItem.classList.add('chat-item-highlighted')
+        
+        // Remove highlight when clicked
+        foundItem.addEventListener('click', () => {
+          foundItem.classList.remove('chat-item-highlighted')
+        }, { once: true })
+      } else if (foundItem && selectedReceiverId === userId) {
+        // Just move to top, no highlight if already in this chat
+        foundItem.remove()
+        
+        const chatListTitle = chatListDiv.querySelector('h3')
+        if (chatListTitle) {
+          chatListTitle.insertAdjacentElement('afterend', foundItem)
+        } else {
+          chatListDiv.insertAdjacentElement('afterbegin', foundItem)
+        }
+      }
     }
 
     function displayMessages(messages, userId) {
