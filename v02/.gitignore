@@ -1,0 +1,16 @@
+# Irritant bestand in elk mapje op macOS
+.DS_Store
+
+# Log bestanden
+logs
+*.logs
+npm-debug.log*
+
+# Alle node modules die gebruikt worden
+node_modules
+
+# Tijdelijke bestanden die door npm gebruikt worden
+.npm
+
+# Een geheim bestand met omgevingsvariabelen zoals API keys of wachtwoorden
+.env

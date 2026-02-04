@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat - Chat App</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="chat-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>💬 Chat</h2>
+        <button id="logout-btn" class="logout-btn">Logout</button>
+      </div>
+
+      <div class="user-info">
+        <img src="{{ currentUser.avatar }}" alt="{{ currentUser.username }}" class="user-avatar">
+        <div class="user-details">
+          <h3>{{ currentUser.username }}</h3>
+          <p>{{ currentUser.email }}</p>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Zoek gebruikers...">
+      </div>
+
+      <!-- Chat List -->
+      <div class="chat-list">
+        <h3>Conversaties</h3>
+        {% if chatsWithMessages.size > 0 %}
+          {% for chat in chatsWithMessages %}
+            <div class="chat-item" onclick="selectChat('{{ chat.chatId }}', '{{ chat.otherUser.id }}')">
+              <img src="{{ chat.otherUser.avatar }}" alt="{{ chat.otherUser.username }}" class="chat-avatar">
+              <div class="chat-item-info">
+                <h4>{{ chat.otherUser.username }}</h4>
+                <p class="last-message">{{ chat.lastMessage }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="no-chats">Nog geen conversaties</p>
+        {% endif %}
+      </div>
+
+      <!-- Users List -->
+      <div class="users-list">
+        <h3>Start een chat</h3>
+        {% if otherUsers.size > 0 %}
+          {% for user in otherUsers %}
+            <div class="user-item" onclick="selectChat(null, '{{ user.id }}')">
+              <img src="{{ user.avatar }}" alt="{{ user.username }}" class="user-avatar">
+              <div class="user-item-info">
+                <h4>{{ user.username }}</h4>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="no-users">Geen andere gebruikers beschikbaar</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="chat-main">
+      <div id="chat-window" class="chat-window">
+        <div class="empty-state">
+          <h2>Selecteer een chat om te beginnen</h2>
+        </div>
+      </div>
+
+      <div id="message-input-area" class="message-input-area" style="display: none;">
+        <form id="message-form" onsubmit="sendMessage(event)">
+          <div class="input-wrapper">
+            <textarea id="message-input" name="text" placeholder="Type een bericht..." rows="1"></textarea>
+            <button type="submit" class="send-btn">Verzend</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const currentUser = {
+      id: '{{ currentUser.id }}',
+      username: '{{ currentUser.username }}'
+    };
+
+    let selectedChatId = null;
+    let selectedReceiverId = null;
+
+    function selectChat(chatId, userId) {
+      selectedChatId = chatId;
+      selectedReceiverId = userId;
+      document.getElementById('message-input-area').style.display = 'flex';
+      loadChat(chatId, userId);
+    }
+
+    function loadChat(chatId, userId) {
+      const chatWindow = document.getElementById('chat-window');
+      chatWindow.innerHTML = '<div class="chat-loading">Berichtjes laden...</div>';
+      
+      fetch(`/messages?userId=${userId}`, {
+        method: 'GET'
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.messages && data.messages.length > 0) {
+          let html = '';
+          data.messages.forEach(msg => {
+            const isOwn = msg.senderId === currentUser.id;
+            const date = new Date(msg.createdAt).toLocaleString('nl-NL');
+            html += `
+              <div class="message ${isOwn ? 'own-message' : 'other-message'}">
+                <p>${escapeHtml(msg.text)}</p>
+                <span class="message-time">${date}</span>
+              </div>
+            `;
+          });
+          chatWindow.innerHTML = html;
+        } else {
+          chatWindow.innerHTML = '<div class="no-messages">Geen berichtjes in deze chat. Begin een conversatie!</div>';
+        }
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+      })
+      .catch(err => {
+        chatWindow.innerHTML = '<div class="error">Fout bij laden berichtjes</div>';
+        console.error(err);
+      });
+    }
+
+    function sendMessage(event) {
+      event.preventDefault();
+      
+      const messageInput = document.getElementById('message-input');
+      const text = messageInput.value.trim();
+      
+      if (!text || !selectedReceiverId) return;
+
+      fetch('/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiverId: selectedReceiverId,
+          text: text
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          messageInput.value = '';
+          loadChat(selectedChatId, selectedReceiverId);
+        } else {
+          alert('Fout bij versturen bericht');
+        }
+      })
+      .catch(err => {
+        alert('Fout: ' + err.message);
+        console.error('Error sending message:', err);
+      });
+    }
+
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      fetch('/logout', { method: 'POST' })
+        .then(() => window.location.href = '/login')
+        .catch(err => console.error('Logout error:', err));
+    });
+
+    // Auto-refresh messages every 2 seconds
+    setInterval(() => {
+      if (selectedReceiverId) {
+        loadChat(selectedChatId, selectedReceiverId);
+      }
+    }, 2000);
+  </script>
+</body>
+</html>

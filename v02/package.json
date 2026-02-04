@@ -1,0 +1,36 @@
+{
+  "name": "connect-your-tribe-profile-card",
+  "version": "0.0.1",
+  "description": "Chat application using Express, Liquid and Firebase",
+  "main": "server.js",
+  "type": "module",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fdnd-task/connect-your-tribe-profile-card.git"
+  },
+  "keywords": [
+    "node",
+    "express",
+    "liquidjs",
+    "firebase"
+  ],
+  "author": "J.P. Sturkenboom <j.p.sturkenboom@hva.nl>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fdnd-task/connect-your-tribe-profile-card/issues"
+  },
+  "homepage": "https://github.com/fdnd-task/connect-your-tribe-profile-card#readme",
+  "dependencies": {
+    "express": "latest",
+    "liquidjs": "latest",
+    "firebase-admin": "latest",
+    "uuid": "latest"
+  }
+}
