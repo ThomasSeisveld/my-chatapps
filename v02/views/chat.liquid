@@ -90,7 +90,9 @@
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      path: '/socket.io/'
     })
     
     const currentUser = {
@@ -113,7 +115,26 @@
     })
 
     socket.on('connect_error', (error) => {
-      console.error('WebSocket error:', error)
+      console.error('❌ WebSocket connection error:', error)
+      console.log('⚠️ WebSocket failed - app will use HTTP fallback for messages')
+      
+      // Show subtle notification
+      const notif = document.createElement('div')
+      notif.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #ff9800;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 10000;
+      `
+      notif.textContent = '⚠️ WebSocket connection failed - using HTTP fallback'
+      document.body.appendChild(notif)
+      
+      setTimeout(() => notif.remove(), 5000)
     })
 
     // Handle incoming messages in real-time
@@ -349,12 +370,48 @@
       
       if (!text || !selectedReceiverId) return;
 
-      // Send message via WebSocket
-      socket.emit('send-message', {
-        chatId: selectedChatId,
-        receiverId: selectedReceiverId,
-        text: text
-      })
+      console.log(`💬 Sending message to ${selectedReceiverId}`)
+
+      // Try WebSocket first
+      if (socket.connected) {
+        console.log(`📤 Sending via WebSocket`)
+        socket.emit('send-message', {
+          chatId: selectedChatId,
+          receiverId: selectedReceiverId,
+          text: text
+        })
+      } else {
+        console.warn('⚠️ WebSocket not connected, using HTTP fallback')
+        // HTTP Fallback
+        fetch('/message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            receiverId: selectedReceiverId,
+            text: text
+          })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              console.log(`✅ Message sent via HTTP`)
+              // Manually add message to chat window
+              appendMessage({ 
+                id: 'temp-' + Date.now(), 
+                senderId: currentUser.id, 
+                text: text, 
+                createdAt: new Date().toISOString() 
+              }, true)
+            } else {
+              console.error('❌ Failed to send message via HTTP:', data.error)
+            }
+          })
+          .catch(err => {
+            console.error('❌ Error sending message via HTTP:', err)
+          })
+      }
 
       messageInput.value = '';
       messageInput.focus()
