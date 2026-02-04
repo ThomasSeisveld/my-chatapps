@@ -149,7 +149,9 @@ io.on('connection', (socket) => {
     socket.userId = userId
     socket.join(`user-${userId}`) // Join user room
     
-    console.log(`✓ User ${userId} connected (${userConnections.get(userId).size} connections)`)
+    console.log(`👤 User ${userId} joined (socket: ${socket.id})`)
+    console.log(`   User ${userId} now has ${userConnections.get(userId).size} active connections`)
+    console.log(`   Joined room: user-${userId}`)
     
     // Notify others that this user is online
     socket.broadcast.emit('user-online', { userId })
@@ -261,6 +263,7 @@ io.on('connection', (socket) => {
       }
 
       // Emit message to receiver and sender
+      console.log(`📤 Sending message-received to user-${receiverId}`)
       io.to(`user-${receiverId}`).emit('message-received', {
         message,
         senderId,
@@ -269,6 +272,7 @@ io.on('connection', (socket) => {
         otherUser: senderUser
       })
 
+      console.log(`📤 Sending message-sent to sender (${senderId})`)
       socket.emit('message-sent', {
         message,
         receiverId,
@@ -282,6 +286,7 @@ io.on('connection', (socket) => {
         updatedAt: new Date().toISOString()
       }
       
+      console.log(`📤 Sending chat-updated to user-${receiverId}`)
       io.to(`user-${receiverId}`).emit('chat-updated', {
         chatUpdate: updateData,
         otherUserId: senderId,
@@ -289,6 +294,7 @@ io.on('connection', (socket) => {
         otherUser: senderUser
       })
       
+      console.log(`📤 Sending chat-updated to user-${senderId}`)
       io.to(`user-${senderId}`).emit('chat-updated', {
         chatUpdate: updateData,
         otherUserId: receiverId,

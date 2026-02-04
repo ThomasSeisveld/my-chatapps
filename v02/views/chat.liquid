@@ -89,7 +89,8 @@
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5
+      reconnectionAttempts: Infinity,
+      transports: ['websocket', 'polling']
     })
     
     const currentUser = {
@@ -103,17 +104,29 @@
 
     // Register user connection
     socket.on('connect', () => {
-      console.log('✓ Connected to WebSocket server')
+      console.log('✓ WebSocket connected:', socket.id)
       socket.emit('user-join', currentUser.id)
+    })
+
+    socket.on('disconnect', (reason) => {
+      console.log('✗ WebSocket disconnected:', reason)
+    })
+
+    socket.on('connect_error', (error) => {
+      console.error('WebSocket error:', error)
     })
 
     // Handle incoming messages in real-time
     socket.on('message-received', (data) => {
+      console.log('📨 Message received:', data)
       const { message, senderId, receiverId, isNewChat, otherUser } = data
       
       if (selectedReceiverId === senderId) {
         // Append message to chat window if it's from the current chat
+        console.log('Adding message to current chat window')
         appendMessage(message, senderId === currentUser.id)
+      } else {
+        console.log(`Not in chat with ${senderId}, just updating list`)
       }
       
       // Update chat list item (create if new chat)
@@ -122,6 +135,7 @@
 
     // Handle own sent messages
     socket.on('message-sent', (data) => {
+      console.log('✉️ Message sent:', data)
       const { message, receiverId, isNewChat, otherUser } = data
       
       if (selectedReceiverId === receiverId) {
@@ -135,6 +149,7 @@
 
     // Handle chat list updates
     socket.on('chat-updated', (data) => {
+      console.log('🔄 Chat updated:', data)
       const { chatUpdate, otherUserId, isNewChat, otherUser } = data
       updateChatListItem(otherUserId, chatUpdate.lastMessage, isNewChat, otherUser)
     })
@@ -183,6 +198,8 @@
     }
 
     function updateChatListItem(userId, lastMessage, isNewChat = false, otherUser = null) {
+      console.log(`🔍 updateChatListItem called: userId=${userId}, isNewChat=${isNewChat}, selectedReceiverId=${selectedReceiverId}`)
+      
       // Find the chat item for this user and update it
       const chatItems = document.querySelectorAll('.chat-item')
       const chatListDiv = document.querySelector('.chat-list')
@@ -197,11 +214,13 @@
             lastMessageElement.textContent = lastMessage
           }
           foundItem = item
+          console.log(`✅ Found existing chat item for user ${userId}`)
         }
       })
       
       // If not found and it's a new chat, create a new item
       if (!foundItem && isNewChat && otherUser) {
+        console.log(`➕ Creating new chat item for ${otherUser.username}`)
         const chatItem = document.createElement('div')
         chatItem.className = 'chat-item'
         chatItem.setAttribute('onclick', `selectChat(null, '${otherUser.id}')`)
@@ -226,6 +245,7 @@
       
       // If found, move to top and highlight (only if not currently in this chat)
       if (foundItem && selectedReceiverId !== userId) {
+        console.log(`🔜 Moving chat item to top and adding highlight (NOT in this chat)`)
         // Remove the item from its current position
         foundItem.remove()
         
@@ -239,12 +259,15 @@
         
         // Add highlight class
         foundItem.classList.add('chat-item-highlighted')
+        console.log(`🎨 Added highlight class to chat item`)
         
         // Remove highlight when clicked
         foundItem.addEventListener('click', () => {
           foundItem.classList.remove('chat-item-highlighted')
+          console.log(`❌ Removed highlight (was clicked)`)
         }, { once: true })
       } else if (foundItem && selectedReceiverId === userId) {
+        console.log(`🔜 Moving chat item to top (already in this chat, no highlight)`)
         // Just move to top, no highlight if already in this chat
         foundItem.remove()
         
