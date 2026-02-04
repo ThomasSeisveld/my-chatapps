@@ -20,11 +20,17 @@ const __dirname = path.dirname(__filename)
 // Initialize Express
 const app = express()
 const httpServer = createServer(app)
+
+// Get the origin URL from environment or use wildcard
+const allowedOrigin = process.env.ORIGIN || '*'
+
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+    origin: allowedOrigin,
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
 })
 
 // Stel Liquid in als 'view engine'
@@ -314,27 +320,48 @@ io.on('connection', (socket) => {
     const { userId } = data
     const currentUserId = socket.userId
 
+    console.log(`📨 load-messages: Loading for user ${userId} from current user ${currentUserId}`)
+
     try {
+      if (!currentUserId) {
+        console.error('❌ No currentUserId in socket')
+        socket.emit('error', { message: 'Not authenticated' })
+        return
+      }
+
       let messages = []
 
-      if (firebaseInitialized) {
-        const chatsSnapshot = await db.ref(`userchats/${currentUserId}`).once('value')
-        const userChatsData = chatsSnapshot.val() || { chats: [] }
+      if (firebaseInitialized && db) {
+        console.log(`🔥 Loading from Firebase for user ${currentUserId}`)
+        
+        try {
+          const chatsSnapshot = await db.ref(`userchats/${currentUserId}`).once('value')
+          const userChatsData = chatsSnapshot.val() || { chats: [] }
+          console.log(`📋 User chats found:`, userChatsData.chats?.length || 0)
 
-        const chat = userChatsData.chats?.find(c => 
-          c.participants && c.participants.includes(userId)
-        )
-
-        if (chat) {
-          const messagesSnapshot = await db.ref(`chats/${chat.chatId}/messages`).once('value')
-          const messagesObj = messagesSnapshot.val() || {}
-          
-          messages = Object.values(messagesObj).sort((a, b) => 
-            new Date(a.createdAt) - new Date(b.createdAt)
+          const chat = userChatsData.chats?.find(c => 
+            c.participants && c.participants.includes(userId)
           )
+
+          if (chat) {
+            console.log(`💬 Chat found: ${chat.chatId}`)
+            const messagesSnapshot = await db.ref(`chats/${chat.chatId}/messages`).once('value')
+            const messagesObj = messagesSnapshot.val() || {}
+            
+            messages = Object.values(messagesObj).sort((a, b) => 
+              new Date(a.createdAt) - new Date(b.createdAt)
+            )
+            console.log(`✅ Messages loaded: ${messages.length} messages`)
+          } else {
+            console.log(`⚠️ No chat found between ${currentUserId} and ${userId}`)
+          }
+        } catch (firebaseErr) {
+          console.error('❌ Firebase query error:', firebaseErr.message)
+          throw firebaseErr
         }
       } else {
         // Demo mode
+        console.log(`📝 Loading from demo mode for user ${currentUserId}`)
         const userChatsData = demoData.userchats[currentUserId] || { chats: [] }
         const chat = userChatsData.chats?.find(c => 
           c.participants && c.participants.includes(userId)
@@ -342,6 +369,9 @@ io.on('connection', (socket) => {
 
         if (chat) {
           messages = demoData.chats[chat.chatId]?.messages || []
+          console.log(`✅ Demo messages loaded: ${messages.length} messages`)
+        } else {
+          console.log(`⚠️ No chat found in demo mode between ${currentUserId} and ${userId}`)
         }
       }
 
@@ -349,9 +379,10 @@ io.on('connection', (socket) => {
         userId,
         messages
       })
+      console.log(`📤 messages-loaded event sent to client`)
     } catch (err) {
-      console.error('Load messages error:', err)
-      socket.emit('error', { message: 'Failed to load messages' })
+      console.error('❌ Load messages error:', err)
+      socket.emit('error', { message: 'Failed to load messages: ' + err.message })
     }
   })
 

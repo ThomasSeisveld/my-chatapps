@@ -189,12 +189,22 @@
     })
 
     function selectChat(chatId, userId) {
+      console.log(`🔗 selectChat called with chatId=${chatId}, userId=${userId}`)
+      console.log(`   Socket connected: ${socket.connected}, socket.id: ${socket.id}`)
+      
+      if (!socket.connected) {
+        console.error('❌ Socket is not connected!')
+        return
+      }
+      
       selectedChatId = chatId;
       selectedReceiverId = userId;
       document.getElementById('message-input-area').style.display = 'flex';
       
+      console.log(`📤 Emitting load-messages for userId=${userId}`)
       // Load existing messages via WebSocket
       socket.emit('load-messages', { userId })
+      console.log(`✅ load-messages emitted`)
     }
 
     function updateChatListItem(userId, lastMessage, isNewChat = false, otherUser = null) {
@@ -371,6 +381,73 @@
         "'": '&#039;'
       };
       return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Initialize chat item event listeners
+    function initializeChatItems() {
+      console.log('🔧 Initializing chat item event listeners')
+      const chatList = document.querySelector('.chat-list')
+      const usersList = document.querySelector('.users-list')
+      
+      // Use event delegation for chat items
+      if (chatList) {
+        chatList.addEventListener('click', (e) => {
+          const chatItem = e.target.closest('.chat-item')
+          if (chatItem) {
+            const onclick = chatItem.getAttribute('onclick')
+            console.log(`🖱️ Chat item clicked: ${onclick}`)
+            // Execute the onclick
+            if (onclick) {
+              try {
+                eval(onclick)
+              } catch (err) {
+                console.error('❌ Error executing onclick:', err)
+              }
+            }
+          }
+        })
+      }
+      
+      // Use event delegation for user items
+      if (usersList) {
+        usersList.addEventListener('click', (e) => {
+          const userItem = e.target.closest('.user-item')
+          if (userItem) {
+            const onclick = userItem.getAttribute('onclick')
+            console.log(`🖱️ User item clicked: ${onclick}`)
+            // Execute the onclick
+            if (onclick) {
+              try {
+                eval(onclick)
+              } catch (err) {
+                console.error('❌ Error executing onclick:', err)
+              }
+            }
+          }
+        })
+      }
+      
+      const chatItems = document.querySelectorAll('.chat-item')
+      const userItems = document.querySelectorAll('.user-item')
+      
+      console.log(`   Found ${chatItems.length} chat items and ${userItems.length} user items`)
+      
+      chatItems.forEach((item, index) => {
+        const onclick = item.getAttribute('onclick')
+        console.log(`   Chat item ${index}: ${onclick}`)
+      })
+      
+      userItems.forEach((item, index) => {
+        const onclick = item.getAttribute('onclick')
+        console.log(`   User item ${index}: ${onclick}`)
+      })
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeChatItems)
+    } else {
+      initializeChatItems()
     }
 
     document.getElementById('logout-btn').addEventListener('click', () => {
