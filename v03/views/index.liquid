@@ -1,0 +1,73 @@
+{% render 'partials/head.liquid' %}
+
+<main>
+  <div class="card" id="card">
+
+    <nav class="navbar">
+           <button id="toggleChatButton">Chat with me</button>
+    </nav>
+
+    <section class="overlay hidden" id="overlay">
+      <div class="chat-header">
+        <h2>Chat met Thomas</h2>
+        <button class="close-chat-btn" id="closeChatBtn">Sluit</button>
+      </div>
+      
+      <div class="student-input-area" id="studentInputArea">
+        <label for="studentId">Voer je student ID in:</label>
+        <input type="text" id="studentId" placeholder="Bijv. 234" maxlength="20">
+        <button class="student-submit-btn" id="submitStudentId">Doorgaan</button>
+      </div>
+
+      <div class="student-profile" id="studentProfile" style="display: none;">
+        <div class="profile-header">
+          <img id="studentAvatar" src="" alt="student avatar" class="profile-avatar">
+          <div class="profile-info">
+            <h3 id="studentName"></h3>
+            <p id="studentBio"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages" style="display: none;"></div>
+
+      <div class="chat-input-area" id="chatInputArea" style="display: none;">
+        <form id="messageForm">
+          <textarea id="messageInput" placeholder="Typ je bericht..." rows="1"></textarea>
+          <button type="submit" class="chat-submit-btn">Stuur</button>
+        </form>
+      </div>
+    </section>
+    
+    <div class="card__inner">
+        <div class="card__face card__face--front">
+          <div class="card__header">
+            <div class="card__image">
+              <img src="{{ person.avatar }}" alt="avatar">
+            </div>
+            <div class="card__details">
+              <h1>{{ person.name }}</h1>
+              <p>Frontend student HVA</p>
+              {% comment %} <p>{{ person|json }}</p> {% endcomment %}
+            </div>
+            <p class="card__quote">Full stack developer</p>
+          </div>
+          <div class="card__body">
+            {{ person.bio }}
+            <button id="toggleButton">Meer informatie</button>
+          </div>
+      </div>
+
+      <div class="card__face card__face--back">
+        <div class="card__body">
+          <p>
+            Mijn naam is Thomas Seisveld, ik ben 19 jaar oud en ik woon in Leiden. Ik ben op dit moment een jaar {{ person.jaar }} {{ person.role }} op de Hogeschool van Amsterdam.
+          </p>
+          <button id="backButton">Terug</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+{% render 'partials/foot.liquid' %}
