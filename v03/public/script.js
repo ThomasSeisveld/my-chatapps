@@ -139,7 +139,7 @@ async function loadChatHistory() {
 // Display a message in the chat
 function displayMessage(text, isOwn, timestamp) {
   const messageEl = document.createElement('div');
-  messageEl.className = `message ${isOwn ? 'own' : 'other'}`;
+  messageEl.className = `message ${isOwn ? 'other' : 'own'}`;
   
   const date = new Date(timestamp).toLocaleString('nl-NL');
   messageEl.innerHTML = `<p>${escapeHtml(text)}</p><span class="message-time">${date}</span>`;
@@ -151,7 +151,7 @@ function displayMessage(text, isOwn, timestamp) {
 // Send message
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  
+  loadChatHistory();
   const text = messageInput.value.trim();
   if (!text || !currentStudentId) return;
   

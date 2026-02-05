@@ -187,9 +187,6 @@ app.get('/admin', async (req, res) => {
 })
 
 // ==================== Chat API Routes ====================
-
-let chatInterval = null;
-
 // Haal berichten op voor een student
 app.get('/messages', async function (request, response) {
   try {
