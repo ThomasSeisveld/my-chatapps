@@ -88,12 +88,19 @@ submitStudentIdBtn.addEventListener('click', async () => {
     studentProfile.style.display = 'flex';
     chatMessages.style.display = 'flex';
     chatInputArea.style.display = 'flex';
-    
-    // Load chat history
+    let chatInterval = null;
+    chatMessages.innerHTML = '';
     loadChatHistory();
+
+    if (chatInterval) clearInterval(chatInterval);
+
+    chatInterval = setInterval(() => {
+      loadChatHistory();
+    }, 5000);
+
   } catch (error) {
     console.error('Error fetching student data:', error);
-    alert('Fout bij ophalen studentgegevens. Controleer je ID.');
+    alert('Fout bij ophalen studentgegevens.');
   }
 });
 
